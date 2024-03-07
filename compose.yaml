@@ -1,0 +1,50 @@
+version: '3.8'
+# mount 10.0.0.2:/nfs/share/akashop /mnt/akashop
+services:
+  traefik:
+    image: traefik:latest
+    container_name: "traefik"
+    command: 
+      - "--providers.docker=true"
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.email=learn@akamai.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+    ports:
+      - "80:80"  # Expose Traefik on port 80 of the host
+      - "443:443"  
+      - "8080:8080" # /dashboard/
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "/mnt/akashop/acme:/etc/traefik/acme"
+  wp:
+    image: wordpress
+    scale: 2
+    restart: always
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: examplepass
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - /mnt/akashop/wp:/var/www/html
+    labels:
+      - "traefik.enable=true"  # Enable Traefik
+      - "traefik.http.routers.wp.rule=Host(`origin-akashop.akamai-lab.com`)"
+      - "traefik.http.routers.wp.tls=true"
+      - "traefik.http.routers.wp.tls.certresolver=letsencrypt"
+
+  db:
+    image: mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: examplepass
+      MYSQL_RANDOM_ROOT_PASSWORD: '1'
+    volumes:
+      - /mnt/akashop/db:/var/lib/mysql
